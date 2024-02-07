@@ -1299,25 +1299,37 @@ class SignatureKernel(Kernel):
     ##### Helper functions for base kernels
 
     def _square_dist(self, X, X2=None):
-        batch = tf.shape(X)[:-2]
-        Xs = tf.reduce_sum(tf.square(X), axis=-1)
+        # TODO: refactor this
+        # ||a - b||^2 = ||a||^2 + ||b||^2 - 2 <a, b>
+
+        # batch = tf.shape(X)[:-2]
+        batch = X.size()[:-2]
+        # Xs = tf.reduce_sum(tf.square(X), axis=-1)
+        Xs = (X * X).sum(dim=-1)
         if X2 is None:
-            dist = -2 * tf.matmul(X, X, transpose_b=True)
-            dist += tf.reshape(
-                Xs, tf.concat((batch, [-1, 1]), axis=0)
-            ) + tf.reshape(Xs, tf.concat((batch, [1, -1]), axis=0))
+            dist = -2 * torch.matmul(X, X.T)
+            # dist += tf.reshape(
+            #     Xs, tf.concat((batch, [-1, 1]), axis=0)
+            # ) + tf.reshape(Xs, tf.concat((batch, [1, -1]), axis=0))
+            dist = dist + (
+                Xs.reshape(*batch, -1, 1) + Xs.reshape(*batch, 1, -1)
+            )
             return dist
 
-        X2s = tf.reduce_sum(tf.square(X2), axis=-1)
-        dist = -2 * tf.matmul(X, X2, transpose_b=True)
-        dist += tf.reshape(
-            Xs, tf.concat((batch, [-1, 1]), axis=0)
-        ) + tf.reshape(X2s, tf.concat((batch, [1, -1]), axis=0))
+        # X2s = tf.reduce_sum(tf.square(X2), axis=-1)
+        X2s = (X2 * X2).sum(dim=-1)
+        dist = -2 * torch.matmul(X, X2.T)
+        # dist += tf.reshape(
+        #     Xs, tf.concat((batch, [-1, 1]), axis=0)
+        # ) + tf.reshape(X2s, tf.concat((batch, [1, -1]), axis=0))
+        dist = dist + (Xs.reshape(*batch, -1, 1) + X2s.reshape(*batch, 1, -1))
         return dist
 
     def _euclid_dist(self, X, X2=None):
         r2 = self._square_dist(X, X2)
-        return tf.sqrt(tf.maximum(r2, 1e-40))
+        # return tf.sqrt(tf.maximum(r2, 1e-40))
+        # return torch.sqrt(torch.maximum(r2, torch.fill(r2, 1e-40)))
+        return torch.sqrt(torch.clamp_min(r2, 1e-40))
 
     ##### Base kernel implementations:
     # To-do: use GPflow kernels for vector valued-data as base kernels
