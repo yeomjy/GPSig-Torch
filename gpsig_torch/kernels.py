@@ -342,7 +342,7 @@ class SignatureKernel(Kernel):
 
         if X2 is not None:
             # num_examples2, len_examples2 = tf.shape(X2)[0], tf.shape(X2)[1]
-            num_examples2, len_examples2 = X2.shape[:2]
+            num_examples2, len_examples2 = X2.size()[:2]
             num_samples2 = num_examples2 * len_examples2
 
         if X2 is None:
@@ -388,7 +388,7 @@ class SignatureKernel(Kernel):
         :Phi_lvls:          a (num_levels+1,) list of low-rank factors for each signature level
         """
 
-        num_examples, len_examples, num_features = X.shape[-3:]
+        num_examples, len_examples, num_features = X.size()[-3:]
         num_samples = num_examples * len_examples
 
         # X = tf.reshape(X, [num_samples, num_features])
@@ -526,7 +526,7 @@ class SignatureKernel(Kernel):
             Z.size(-1),
         )
         # num_examples, len_examples = tf.shape(X)[-3], tf.shape(X)[-2]
-        num_examples, len_examples = X.shape[-3:-1]
+        num_examples, len_examples = X.size()[-3:-1]
 
         # X = tf.reshape(X, [num_examples * len_examples, num_features])
         X = X.reshape(num_examples * len_examples, num_features)
@@ -570,7 +570,7 @@ class SignatureKernel(Kernel):
         """
 
         # num_examples, len_examples, _ = tf.unstack(tf.shape(X))
-        num_examples, len_examples = X.shape[:2]
+        num_examples, len_examples = X.size()[:2]
 
         num_features = self.num_features * (self.num_lags + 1)
 
@@ -603,7 +603,7 @@ class SignatureKernel(Kernel):
         """
 
         # len_tensors, num_tensors = tf.shape(Z)[0], tf.shape(Z)[1]
-        len_tensors, num_tensors = Z.shape[:2]
+        len_tensors, num_tensors = Z.size()[:2]
 
         # TODO
         if self.lengthscales is not None:
