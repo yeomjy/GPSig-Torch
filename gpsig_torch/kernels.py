@@ -574,6 +574,7 @@ class SignatureKernel(Kernel):
             num_examples, len_examples, self.num_lags + 1, self.num_features
         )
 
+        # TODO
         if self.lengthscales is not None:
             X /= self.lengthscales[None, None, None, :]
 
@@ -593,6 +594,7 @@ class SignatureKernel(Kernel):
         # len_tensors, num_tensors = tf.shape(Z)[0], tf.shape(Z)[1]
         len_tensors, num_tensors = Z.shape[:2]
 
+        # TODO
         if self.lengthscales is not None:
             Z = Z.reshape(
                 len_tensors,
@@ -619,6 +621,7 @@ class SignatureKernel(Kernel):
             Z.size(-1),
         )
 
+        # TODO
         if self.lengthscales is not None:
             Z = Z.reshape(
                 len_tensors,
@@ -631,7 +634,8 @@ class SignatureKernel(Kernel):
             if self.num_lags > 0:
                 Z *= self.gamma[None, None, None, :, None]
 
-        Z = tf.reshape(Z, (len_tensors, num_tensors, 2, num_features))
+        # Z = tf.reshape(Z, (len_tensors, num_tensors, 2, num_features))
+        Z = Z.reshape(len_tensors, num_tensors, 2, num_features)
         return Z
 
     # @params_as_tensors
@@ -676,7 +680,7 @@ class SignatureKernel(Kernel):
                 # )
                 K_lvls = torch.stack(
                     [torch.matmul(P, P.T) for P in Phi_lvls],
-                    axis=0,
+                    dim=0,
                 )
             else:
                 K_lvls = self._K_seq(X_scaled)
@@ -779,7 +783,7 @@ class SignatureKernel(Kernel):
                     K1_lvls_diag = torch.stack(
                         [
                             # tf.reduce_sum(tf.square(P), axis=-1)
-                            (P * P).sum(dim=-1)
+                            torch.sum(torch.square(P), dim=-1)
                             for P in Phi_lvls
                         ],
                         dim=0,
@@ -787,7 +791,7 @@ class SignatureKernel(Kernel):
                     K2_lvls_diag = torch.stack(
                         [
                             # tf.reduce_sum(tf.square(P), axis=-1)
-                            (P * P).sum(dim=-1)
+                            torch.sum(torch.square(P), dim=-1)
                             for P in Phi2_lvls
                         ],
                         dim=0,
@@ -813,7 +817,8 @@ class SignatureKernel(Kernel):
         if return_levels:
             return K_lvls
         else:
-            return tf.reduce_sum(K_lvls, axis=0)
+            # return tf.reduce_sum(K_lvls, axis=0)
+            return torch.sum(K_lvls, dim=0)
 
     # @params_as_tensors
     def Kdiag(self, X, presliced=False, return_levels=False):
@@ -851,7 +856,7 @@ class SignatureKernel(Kernel):
             #     [tf.reduce_sum(tf.square(P), axis=-1) for P in Phi_lvls], axis=0
             # )
             K_lvls_diag = torch.stack(
-                [(P * P).sum(dim=-1) for P in Phi_lvls],
+                [torch.sum(torch.square(P), dim=-1) for P in Phi_lvls],
                 dim=0,
             )
         else:
@@ -863,9 +868,10 @@ class SignatureKernel(Kernel):
             return K_lvls_diag
         else:
             # return tf.reduce_sum(K_lvls_diag, axis=0)
-            return K_lvls_diag.sum(dim=0)
+            # return K_lvls_diag.sum(dim=0)
+            return torch.sum(K_lvls_diag, dim=0)
 
-    @params_as_tensors
+    # @params_as_tensors
     def K_tens(self, Z, return_levels=False, increments=False):
         """
         Computes a square covariance matrix of inducing tensors Z.
@@ -925,35 +931,53 @@ class SignatureKernel(Kernel):
         X = self._apply_scaling_and_lags_to_sequences(X)
 
         if self.low_rank:
-            seeds = tf.random_uniform(
-                (self.num_levels - 1, 2),
-                minval=0,
-                maxval=np.iinfo(settings.int_type).max,
-                dtype=settings.int_type,
+            # seeds = tf.random_uniform(
+            #     (self.num_levels - 1, 2),
+            #     minval=0,
+            #     maxval=np.iinfo(settings.int_type).max,
+            #     dtype=settings.int_type,
+            # )
+            INT_MAX = 1 << 31
+            seeds = torch.randint(
+                low=0, high=INT_MAX, size=(self.num_levels - 1, 2)
             )
             idx, _ = low_rank_calculations._draw_indices(
                 num_tensors * len_tensors * (int(increments) + 1)
                 + num_examples * len_examples,
                 self.num_components,
             )
-            nys_samples = tf.gather(
-                tf.concat(
-                    (
-                        tf.reshape(
-                            Z,
-                            [
-                                num_tensors
-                                * len_tensors
-                                * (int(increments) + 1),
-                                -1,
-                            ],
+            # nys_samples = tf.gather(
+            #     tf.concat(
+            #         (
+            #             tf.reshape(
+            #                 Z,
+            #                 [
+            #                     num_tensors
+            #                     * len_tensors
+            #                     * (int(increments) + 1),
+            #                     -1,
+            #                 ],
+            #             ),
+            #             tf.reshape(X, [num_examples * len_examples, -1]),
+            #         ),
+            #         axis=0,
+            #     ),
+            #     idx,
+            #     axis=0,
+            # )
+            nys_samples = torch.gather(
+                torch.cat(
+                    [
+                        Z.reshape(
+                            num_tensors * len_tensors * (int(increments) + 1),
+                            -1,
                         ),
-                        tf.reshape(X, [num_examples * len_examples, -1]),
-                    ),
-                    axis=0,
+                        X.reshape(num_examples * len_examples, -1),
+                    ],
+                    dim=0,
                 ),
-                idx,
-                axis=0,
+                index=idx,
+                dim=0,
             )
 
             Phi_Z_lvls = self._K_tens_lr_feat(
@@ -963,28 +987,40 @@ class SignatureKernel(Kernel):
                 X, nys_samples=nys_samples, seeds=seeds
             )
 
-            Kzx_lvls = tf.stack(
+            # Kzx_lvls = tf.stack(
+            #     [
+            #         tf.matmul(Phi_Z_lvls[i], Phi_X_lvls[i], transpose_b=True)
+            #         for i in range(self.num_levels + 1)
+            #     ],
+            #     axis=0,
+            # )
+            Kzx_lvls = torch.stack(
                 [
-                    tf.matmul(Phi_Z_lvls[i], Phi_X_lvls[i], transpose_b=True)
+                    torch.matmul(Phi_Z_lvls[i], Phi_X_lvls[i].T)
                     for i in range(self.num_levels + 1)
                 ],
-                axis=0,
+                dim=0,
             )
         else:
             Kzx_lvls = self._K_tens_vs_seq(Z, X, increments=increments)
 
         if self.normalization:
             if self.low_rank:
-                Kxx_lvls_diag = tf.stack(
-                    [tf.reduce_sum(tf.square(P), axis=-1) for P in Phi_X_lvls],
-                    axis=0,
+                # Kxx_lvls_diag = tf.stack(
+                #     [tf.reduce_sum(tf.square(P), axis=-1) for P in Phi_X_lvls],
+                #     axis=0,
+                # )
+                Kxx_lvls_diag = torch.stack(
+                    [torch.sum(torch.square(P), dim=-1) for P in Phi_X_lvls]
                 )
             else:
                 Kxx_lvls_diag = self._K_seq_diag(X)
 
+            # TODO
             Kxx_lvls_diag += settings.jitter
 
-            Kxx_lvls_diag_sqrt = tf.sqrt(Kxx_lvls_diag)
+            # Kxx_lvls_diag_sqrt = tf.sqrt(Kxx_lvls_diag)
+            Kxx_lvls_diag_sqrt = torch.sqrt(Kxx_lvls_diag)
             Kzx_lvls /= Kxx_lvls_diag_sqrt[:, None, :]
 
         Kzx_lvls *= self.sigma * self.variances[:, None, None]
@@ -992,9 +1028,10 @@ class SignatureKernel(Kernel):
         if return_levels:
             return Kzx_lvls
         else:
-            return tf.reduce_sum(Kzx_lvls, axis=0)
+            # return tf.reduce_sum(Kzx_lvls, axis=0)
+            return torch.sum(Kzx_lvls, dim=0)
 
-    @params_as_tensors
+    # @params_as_tensors
     def K_tens_n_seq_covs(
         self,
         Z,
@@ -1011,11 +1048,15 @@ class SignatureKernel(Kernel):
         if not presliced:
             X, _ = self._slice(X, None)
 
-        num_examples = tf.shape(X)[0]
-        X = tf.reshape(X, (num_examples, -1, self.num_features))
-        len_examples = tf.shape(X)[1]
+        # num_examples = tf.shape(X)[0]
+        num_examples = X.size(0)
+        # X = tf.reshape(X, (num_examples, -1, self.num_features))
+        X = X.reshape(num_examples, -1, self.num_features)
+        # len_examples = tf.shape(X)[1]
+        len_examples = X.size(1)
 
-        num_tensors, len_tensors = tf.shape(Z)[1], tf.shape(Z)[0]
+        # num_tensors, len_tensors = tf.shape(Z)[1], tf.shape(Z)[0]
+        len_tensors, num_tensors = Z.size()[:2]
 
         if increments:
             Z = self._apply_scaling_to_incremental_tensors(Z)
@@ -1025,35 +1066,53 @@ class SignatureKernel(Kernel):
         X = self._apply_scaling_and_lags_to_sequences(X)
 
         if self.low_rank:
-            seeds = tf.random_uniform(
-                (self.num_levels - 1, 2),
-                minval=0,
-                maxval=np.iinfo(settings.int_type).max,
-                dtype=settings.int_type,
+            INT_MAX = 1 << 31
+            # seeds = tf.random_uniform(
+            #     (self.num_levels - 1, 2),
+            #     minval=0,
+            #     maxval=np.iinfo(settings.int_type).max,
+            #     dtype=settings.int_type,
+            # )
+            seeds = torch.randint(
+                low=0, high=INT_MAX, size=(self.num_levels - 1, 2)
             )
             idx, _ = low_rank_calculations._draw_indices(
                 num_tensors * len_tensors * (int(increments) + 1)
                 + num_examples * len_examples,
                 self.num_components,
             )
-            nys_samples = tf.gather(
-                tf.concat(
-                    (
-                        tf.reshape(
-                            Z,
-                            [
-                                num_tensors
-                                * len_tensors
-                                * (int(increments) + 1),
-                                -1,
-                            ],
+            # nys_samples = tf.gather(
+            #     tf.concat(
+            #         (
+            #             tf.reshape(
+            #                 Z,
+            #                 [
+            #                     num_tensors
+            #                     * len_tensors
+            #                     * (int(increments) + 1),
+            #                     -1,
+            #                 ],
+            #             ),
+            #             tf.reshape(X, [num_examples * len_examples, -1]),
+            #         ),
+            #         axis=0,
+            #     ),
+            #     idx,
+            #     axis=0,
+            # )
+            nys_samples = torch.gather(
+                torch.cat(
+                    [
+                        Z.reshape(
+                            num_tensors * len_tensors * (int(increments) + 1),
+                            -1,
                         ),
-                        tf.reshape(X, [num_examples * len_examples, -1]),
-                    ),
-                    axis=0,
+                        X.reshape(num_examples * len_examples, -1),
+                    ],
+                    dim=0,
                 ),
-                idx,
-                axis=0,
+                index=idx,
+                dim=0,
             )
 
             Phi_Z_lvls = self._K_tens_lr_feat(
@@ -1063,15 +1122,26 @@ class SignatureKernel(Kernel):
                 X, nys_samples=nys_samples, seeds=seeds
             )
 
-            Kzz_lvls = tf.stack(
-                [tf.matmul(P, P, transpose_b=True) for P in Phi_Z_lvls], axis=0
+            # Kzz_lvls = tf.stack(
+            #     [tf.matmul(P, P, transpose_b=True) for P in Phi_Z_lvls], axis=0
+            # )
+            Kzz_lvls = torch.stack(
+                [torch.matmul(P, P.T) for P in Phi_Z_lvls],
+                dim=0,
             )
-            Kzx_lvls = tf.stack(
+            # Kzx_lvls = tf.stack(
+            #     [
+            #         tf.matmul(Phi_Z_lvls[i], Phi_X_lvls[i], transpose_b=True)
+            #         for i in range(self.num_levels + 1)
+            #     ],
+            #     axis=0,
+            # )
+            Kzx_lvls = torch.stack(
                 [
-                    tf.matmul(Phi_Z_lvls[i], Phi_X_lvls[i], transpose_b=True)
+                    torch.matmul(Phi_Z_lvls[i], Phi_X_lvls[i].T)
                     for i in range(self.num_levels + 1)
                 ],
-                axis=0,
+                dim=0,
             )
         else:
             Kzz_lvls = self._K_tens(Z, increments=increments)
@@ -1079,9 +1149,12 @@ class SignatureKernel(Kernel):
 
         if full_X_cov:
             if self.low_rank:
-                Kxx_lvls = tf.stack(
-                    [tf.matmul(P, P, transpose_b=True) for P in Phi_X_lvls],
-                    axis=0,
+                # Kxx_lvls = tf.stack(
+                #     [tf.matmul(P, P, transpose_b=True) for P in Phi_X_lvls],
+                #     axis=0,
+                # )
+                Kxx_lvls = torch.stack(
+                    [torch.matmul(P, P.T) for P in Phi_X_lvls]
                 )
             else:
                 Kxx_lvls = self._K_seq(X)
@@ -1092,7 +1165,8 @@ class SignatureKernel(Kernel):
                     * tf.eye(num_examples, dtype=settings.float_type)[None]
                 )
 
-                Kxx_lvls_diag_sqrt = tf.sqrt(tf.matrix_diag_part(Kxx_lvls))
+                # Kxx_lvls_diag_sqrt = tf.sqrt(tf.matrix_diag_part(Kxx_lvls))
+                Kxx_lvls_diag_sqrt = torch.sqrt(torch.diag(Kxx_lvls))
 
                 Kxx_lvls /= (
                     Kxx_lvls_diag_sqrt[:, :, None]
@@ -1108,26 +1182,35 @@ class SignatureKernel(Kernel):
                 return Kzz_lvls, Kzx_lvls, Kxx_lvls
             else:
                 return (
-                    tf.reduce_sum(Kzz_lvls, axis=0),
-                    tf.reduce_sum(Kzx_lvls, axis=0),
-                    tf.reduce_sum(Kxx_lvls, axis=0),
+                    torch.sum(Kzz_lvls, dim=0),
+                    torch.sum(Kzx_lvls, dim=0),
+                    torch.sum(Kxx_lvls, dim=0),
+                    # tf.reduce_sum(Kzz_lvls, axis=0),
+                    # tf.reduce_sum(Kzx_lvls, axis=0),
+                    # tf.reduce_sum(Kxx_lvls, axis=0),
                 )
 
         else:
             if self.low_rank:
-                Kxx_lvls_diag = tf.stack(
-                    [tf.reduce_sum(tf.square(P), axis=-1) for P in Phi_X_lvls],
-                    axis=0,
+                Kxx_lvls_diag = torch.stack(
+                    [torch.sum(torch.square(P), dim=-1) for P in Phi_X_lvls],
+                    dim=0,
                 )
+                # Kxx_lvls_diag = tf.stack(
+                #     [tf.reduce_sum(tf.square(P), axis=-1) for P in Phi_X_lvls],
+                #     axis=0,
+                # )
+
             else:
                 Kxx_lvls_diag = self._K_seq_diag(X)
 
             if self.normalization:
                 Kxx_lvls_diag += settings.jitter
 
-                Kxx_lvls_diag_sqrt = tf.sqrt(Kxx_lvls_diag)
+                Kxx_lvls_diag_sqrt = torch.sqrt(Kxx_lvls_diag)
 
                 Kzx_lvls /= Kxx_lvls_diag_sqrt[:, None, :]
+                # TODO
                 Kxx_lvls_diag = tf.tile(
                     self.sigma * self.variances[:, None], [1, num_examples]
                 )
@@ -1141,12 +1224,15 @@ class SignatureKernel(Kernel):
                 return Kzz_lvls, Kzx_lvls, Kxx_lvls_diag
             else:
                 return (
-                    tf.reduce_sum(Kzz_lvls, axis=0),
-                    tf.reduce_sum(Kzx_lvls, axis=0),
-                    tf.reduce_sum(Kxx_lvls_diag, axis=0),
+                    torch.sum(Kzz_lvls, dim=0),
+                    torch.sum(Kzx_lvls, dim=0),
+                    torch.sum(Kxx_lvls_diag, dim=0),
+                    # tf.reduce_sum(Kzz_lvls, axis=0),
+                    # tf.reduce_sum(Kzx_lvls, axis=0),
+                    # tf.reduce_sum(Kxx_lvls_diag, axis=0),
                 )
 
-    @params_as_tensors
+    # @params_as_tensors
     def K_seq_n_seq_covs(
         self, X, X2, full_X2_cov=False, return_levels=False, presliced=False
     ):
@@ -1157,38 +1243,59 @@ class SignatureKernel(Kernel):
         if not presliced:
             X2, _ = self._slice(X2, None)
 
-        num_examples = tf.shape(X)[0]
-        X = tf.reshape(X, (num_examples, -1, self.num_features))
-        len_examples = tf.shape(X)[1]
+        # num_examples = tf.shape(X)[0]
+        num_examples = X.size(0)
+        # X = tf.reshape(X, (num_examples, -1, self.num_features))
+        X = X.reshape(num_examples, -1, self.num_features)
+        # len_examples = tf.shape(X)[1]
+        len_examples = X.size(1)
 
-        num_examples2 = tf.shape(X2)[0]
-        X2 = tf.reshape(X2, (num_examples2, -1, self.num_features))
-        len_examples2 = tf.shape(X2)[1]
+        num_examples2 = X2.size(0)
+        X2 = X2.reshape(num_examples2, -1, self.num_features)
+        len_examples2 = X2.size(1)
+        # num_examples2 = tf.shape(X2)[0]
+        # X2 = tf.reshape(X2, (num_examples2, -1, self.num_features))
+        # len_examples2 = tf.shape(X2)[1]
 
         X = self._apply_scaling_and_lags_to_sequences(X)
         X2 = self._apply_scaling_and_lags_to_sequences(X2)
 
         if self.low_rank:
-            seeds = tf.random_uniform(
-                (self.num_levels - 1, 2),
-                minval=0,
-                maxval=np.iinfo(settings.int_type).max,
-                dtype=settings.int_type,
+            # seeds = tf.random_uniform(
+            #     (self.num_levels - 1, 2),
+            #     minval=0,
+            #     maxval=np.iinfo(settings.int_type).max,
+            #     dtype=settings.int_type,
+            # )
+            INT_MAX = 1 << 31
+            seeds = torch.randint(
+                low=0, high=INT_MAX, size=(self.num_levels - 1, 2)
             )
             idx, _ = low_rank_calculations._draw_indices(
                 num_examples * len_examples + num_examples2 * len_examples2,
                 self.num_components,
             )
-            nys_samples = tf.gather(
-                tf.concat(
-                    (
-                        tf.reshape(X, [num_examples * len_examples, -1]),
-                        tf.reshape(X2, [num_examples2 * len_examples2, -1]),
-                    ),
-                    axis=0,
+            # nys_samples = tf.gather(
+            #     tf.concat(
+            #         (
+            #             tf.reshape(X, [num_examples * len_examples, -1]),
+            #             tf.reshape(X2, [num_examples2 * len_examples2, -1]),
+            #         ),
+            #         axis=0,
+            #     ),
+            #     idx,
+            #     axis=0,
+            # )
+            nys_samples = torch.gather(
+                torch.cat(
+                    [
+                        X.reshape(num_examples * len_examples, -1),
+                        X2.reshape(num_examples2 * len_examples2, -1),
+                    ],
+                    dim=0,
                 ),
-                idx,
-                axis=0,
+                index=idx,
+                dim=0,
             )
 
             Phi_lvls = self._K_seq_lr_feat(
@@ -1198,15 +1305,25 @@ class SignatureKernel(Kernel):
                 X2, nys_samples=nys_samples, seeds=seeds
             )
 
-            Kxx_lvls = tf.stack(
-                [tf.matmul(P, P, transpose_b=True) for P in Phi_lvls], axis=0
+            # Kxx_lvls = tf.stack(
+            #     [tf.matmul(P, P, transpose_b=True) for P in Phi_lvls], axis=0
+            # )
+            Kxx_lvls = torch.stack(
+                [torch.matmul(P, P.T) for P in Phi_lvls], dim=0
             )
-            Kxx2_lvls = tf.stack(
+            # Kxx2_lvls = tf.stack(
+            #     [
+            #         tf.matmul(Phi_lvls[i], Phi2_lvls[i], transpose_b=True)
+            #         for i in range(self.num_levels + 1)
+            #     ],
+            #     axis=0,
+            # )
+            Kxx2_lvls = torch.stack(
                 [
-                    tf.matmul(Phi_lvls[i], Phi2_lvls[i], transpose_b=True)
+                    torch.matmul(Phi_lvls[i], Phi2_lvls[i].T)
                     for i in range(self.num_levels + 1)
                 ],
-                axis=0,
+                dim=0,
             )
         else:
             Kxx_lvls = self._K_seq(X)
@@ -1218,7 +1335,8 @@ class SignatureKernel(Kernel):
                 * tf.eye(num_examples, dtype=settings.float_type)[None]
             )
 
-            Kxx_lvls_diag_sqrt = tf.sqrt(tf.matrix_diag_part(Kxx_lvls))
+            # Kxx_lvls_diag_sqrt = tf.sqrt(tf.matrix_diag_part(Kxx_lvls))
+            Kxx_lvls_diag_sqrt = torch.sqrt(torch.diag(Kxx_lvls))
             Kxx_lvls /= (
                 Kxx_lvls_diag_sqrt[:, :, None] * Kxx_lvls_diag_sqrt[:, None, :]
             )
@@ -1234,17 +1352,28 @@ class SignatureKernel(Kernel):
                 Kx2x2_lvls = self._K_seq(X2)
 
             if self.normalization:
-                K_x2x2_lvls += (
+                # K_x2x2_lvls += (
+                #     settings.jitter
+                #     * tf.eye(num_examples2, dtype=settings.float_type)[None]
+                # )
+                Kx2x2_lvls += (
                     settings.jitter
                     * tf.eye(num_examples2, dtype=settings.float_type)[None]
                 )
 
-                Kx2x2_lvls_diag_sqrt = tf.sqrt(tf.matrix_diag_part(K_x2x2_lvls))
+                # Kx2x2_lvls_diag_sqrt = tf.sqrt(tf.matrix_diag_part(K_x2x2_lvls))
+                Kx2x2_lvls_diag_sqrt = torch.sqrt(torch.diag(Kx2x2_lvls))
+                # TODO
 
-                Kxx2_lvls /= Kx2x2_lvls_diags_sqrt[:, None, :]
+                # Kxx2_lvls /= Kx2x2_lvls_diags_sqrt[:, None, :]
+                # Kx2x2_lvls /= (
+                #     Kx2x2_lvls_diags_sqrt[:, :, None]
+                #     * Kx2x2_lvls_diags_sqrt[:, None, :]
+                # )
+                Kxx2_lvls /= Kx2x2_lvls_diag_sqrt[:, None, :]
                 Kx2x2_lvls /= (
-                    Kx2x2_lvls_diags_sqrt[:, :, None]
-                    * Kx2x2_lvls_diags_sqrt[:, None, :]
+                    Kx2x2_lvls_diag_sqrt[:, :, None]
+                    * Kx2x2_lvls_diag_sqrt[:, None, :]
                 )
 
             Kxx_lvls *= self.sigma * self.variances[:, None, None]
@@ -1255,29 +1384,38 @@ class SignatureKernel(Kernel):
                 return Kxx_lvls, Kxx2_lvls, Kx2x2_lvls
             else:
                 return (
-                    tf.reduce_sum(Kxx_lvls, axis=0),
-                    tf.reduce_sum(Kxx2_lvls, axis=0),
-                    tf.reduce_sum(Kx2x2_lvls, axis=0),
+                    torch.sum(Kxx_lvls, dim=0),
+                    torch.sum(Kxx2_lvls, dim=0),
+                    torch.sum(Kx2x2_lvls, dim=0),
+                    # tf.reduce_sum(Kxx_lvls, axis=0),
+                    # tf.reduce_sum(Kxx2_lvls, axis=0),
+                    # tf.reduce_sum(Kx2x2_lvls, axis=0),
                 )
 
         else:
             if self.low_rank:
-                Kx2x2_lvls_diag = tf.stack(
-                    [tf.reduce_sum(tf.square(P), axis=-1) for P in Phi2_lvls],
-                    axis=0,
+                Kx2x2_lvls_diag = torch.stack(
+                    [torch.sum(torch.square(P), dim=-1) for P in Phi2_lvls],
+                    dim=0,
                 )
+                # Kx2x2_lvls_diag = tf.stack(
+                #     [tf.reduce_sum(tf.square(P), axis=-1) for P in Phi2_lvls],
+                #     axis=0,
+                # )
             else:
                 Kx2x2_lvls_diag = self._K_seq_diag(X2)
 
             if self.normalization:
                 Kx2x2_lvls_diag += settings.jitter
 
-                Kx2x2_lvls_diag_sqrt = tf.sqrt(Kx2x2_lvls_diag)
+                # Kx2x2_lvls_diag_sqrt = tf.sqrt(Kx2x2_lvls_diag)
+                Kx2x2_lvls_diag_sqrt = torch.sqrt(Kx2x2_lvls_diag)
 
                 Kxx2_lvls /= (
                     Kxx_lvls_diag_sqrt[:, :, None]
                     * Kx2x2_lvls_diag_sqrt[:, None, :]
                 )
+                # TODO
                 Kx2x2_lvls_diag = tf.tile(
                     self.sigma * self.variances[:, None], [1, num_examples2]
                 )
@@ -1291,9 +1429,12 @@ class SignatureKernel(Kernel):
                 return Kxx_lvls, Kxx2_lvls, Kx2x2_lvls_diag
             else:
                 return (
-                    tf.reduce_sum(Kxx_lvls, axis=0),
-                    tf.reduce_sum(Kxx2_lvls, axis=0),
-                    tf.reduce_sum(Kx2x2_lvls_diag, axis=0),
+                    torch.sum(Kxx_lvls, dim=0),
+                    torch.sum(Kxx2_lvls, dim=0),
+                    torch.sum(Kx2x2_lvls_diag, dim=0),
+                    # tf.reduce_sum(Kxx_lvls, axis=0),
+                    # tf.reduce_sum(Kxx2_lvls, axis=0),
+                    # tf.reduce_sum(Kx2x2_lvls_diag, axis=0),
                 )
 
     ##### Helper functions for base kernels
