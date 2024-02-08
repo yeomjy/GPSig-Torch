@@ -23,6 +23,7 @@ class SignatureKernel(Kernel):
         num_levels,
         # kwargs
         order=1,
+        variances=1,
         normalization=True,
         difference=True,
         num_lags=None,
@@ -98,6 +99,9 @@ class SignatureKernel(Kernel):
 
         self.normalization = normalization
         self.difference = difference
+
+        self.variances = nn.Parameter(variances * torch.ones(num_levels + 1))
+        self.register_constraint("variances", constraints.Positive())
 
         # self.sigma = Parameter(
         #     1.0, transform=transforms.positive, dtype=settings.float_type
@@ -1446,7 +1450,8 @@ class SignatureKernel(Kernel):
         # batch = tf.shape(X)[:-2]
         batch = X.size()[:-2]
         # Xs = tf.reduce_sum(tf.square(X), axis=-1)
-        Xs = (X * X).sum(dim=-1)
+        # Xs = (X * X).sum(dim=-1)
+        Xs = torch.sum(torch.square(X), dim=-1)
         if X2 is None:
             dist = -2 * torch.matmul(X, X.T)
             # dist += tf.reshape(
@@ -1458,7 +1463,8 @@ class SignatureKernel(Kernel):
             return dist
 
         # X2s = tf.reduce_sum(tf.square(X2), axis=-1)
-        X2s = (X2 * X2).sum(dim=-1)
+        # X2s = (X2 * X2).sum(dim=-1)
+        X2s = torch.sum(torch.square(X2), dim=-1)
         dist = -2 * torch.matmul(X, X2.T)
         # dist += tf.reshape(
         #     Xs, tf.concat((batch, [-1, 1]), axis=0)
