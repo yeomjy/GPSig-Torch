@@ -27,6 +27,9 @@ class SignatureKernel(Kernel):
         normalization=True,
         difference=True,
         num_lags=None,
+        jitter: float = 1e-6,
+        float_dtype=torch.float64,
+        int_dtype=torch.int32,
         # low-rank options
         low_rank=False,
         num_components=50,
@@ -90,6 +93,9 @@ class SignatureKernel(Kernel):
         self.order = (
             num_levels if (order <= 0 or order >= num_levels) else order
         )
+        self.jitter = jitter
+        self.float_type = float_dtype
+        self.int_dtype = int_dtype
 
         if self.order != 1 and low_rank:
             raise NotImplementedError(
@@ -137,11 +143,12 @@ class SignatureKernel(Kernel):
                     # )
                     # transform is handled by @property(def lags())
                     self._lags = nn.Parameter(
-                        0.1 * torch.arange(1, num_lags + 1, dtype=self.dtype)
+                        0.1
+                        * torch.arange(1, num_lags + 1, dtype=self.float_type)
                     )
 
                     gamma = 1.0 / torch.arange(
-                        1, self.num_lags + 2, dtype=self.dtype
+                        1, self.num_lags + 2, dtype=self.float_type
                     )
                     gamma /= torch.sum(gamma)
                     self.gamma = nn.Parameter(
@@ -696,7 +703,7 @@ class SignatureKernel(Kernel):
                 # )
                 K_lvls = (
                     K_lvls
-                    + settings.jitter
+                    + self.jitter
                     * torch.eye(num_examples, dtype=self.dtype)[None]
                 )
                 # K_lvls_diag_sqrt = tf.sqrt(tf.matrix_diag_part(K_lvls))
@@ -805,8 +812,8 @@ class SignatureKernel(Kernel):
                     K2_lvls_diag = self._K_seq_diag(X2_scaled)
 
                 # TODO: settings.jitter
-                K1_lvls_diag += settings.jitter
-                K2_lvls_diag += settings.jitter
+                K1_lvls_diag += self.jitter
+                K2_lvls_diag += self.jitter
 
                 K1_lvls_diag_sqrt = K1_lvls_diag.sqrt()
                 K2_lvls_diag_sqrt = K2_lvls_diag.sqrt()
@@ -836,13 +843,20 @@ class SignatureKernel(Kernel):
         if self.normalization:
             # TODO: add self.variances
             if return_levels:
-                return tf.tile(
-                    self.sigma * self.variances[:, None], [1, num_examples]
+                # return tf.tile(
+                #     self.sigma * self.variances[:, None], [1, num_examples]
+                # )
+                return torch.tile(
+                    self.sigma * self.variances[:, None], dims=(1, num_examples)
                 )
                 # return torch.tile(self.sigma, [1, num_examples])
             else:
-                return tf.fill(
-                    (num_examples,), self.sigma * tf.reduce_sum(self.variances)
+                # return tf.fill(
+                #     (num_examples,), self.sigma * tf.reduce_sum(self.variances)
+                # )
+                return torch.fill(
+                    torch.empty((num_examples,)),
+                    self.sigma * torch.sum(self.variances),
                 )
                 # return torch.fill(self.sigma)
 
@@ -1021,7 +1035,7 @@ class SignatureKernel(Kernel):
                 Kxx_lvls_diag = self._K_seq_diag(X)
 
             # TODO
-            Kxx_lvls_diag += settings.jitter
+            Kxx_lvls_diag += self.jitter
 
             # Kxx_lvls_diag_sqrt = tf.sqrt(Kxx_lvls_diag)
             Kxx_lvls_diag_sqrt = torch.sqrt(Kxx_lvls_diag)
@@ -1165,8 +1179,8 @@ class SignatureKernel(Kernel):
 
             if self.normalization:
                 Kxx_lvls += (
-                    settings.jitter
-                    * tf.eye(num_examples, dtype=settings.float_type)[None]
+                    self.jitter
+                    * torch.eye(num_examples, dtype=self.float_type)[None]
                 )
 
                 # Kxx_lvls_diag_sqrt = tf.sqrt(tf.matrix_diag_part(Kxx_lvls))
@@ -1209,14 +1223,17 @@ class SignatureKernel(Kernel):
                 Kxx_lvls_diag = self._K_seq_diag(X)
 
             if self.normalization:
-                Kxx_lvls_diag += settings.jitter
+                Kxx_lvls_diag += self.jitter
 
                 Kxx_lvls_diag_sqrt = torch.sqrt(Kxx_lvls_diag)
 
                 Kzx_lvls /= Kxx_lvls_diag_sqrt[:, None, :]
                 # TODO
-                Kxx_lvls_diag = tf.tile(
-                    self.sigma * self.variances[:, None], [1, num_examples]
+                # Kxx_lvls_diag = tf.tile(
+                #     self.sigma * self.variances[:, None], [1, num_examples]
+                # )
+                Kxx_lvls_diag = torch.tile(
+                    self.sigma * self.variances[:, None], (1, num_examples)
                 )
             else:
                 Kxx_lvls_diag *= self.sigma * self.variances[:, None]
@@ -1335,8 +1352,8 @@ class SignatureKernel(Kernel):
 
         if self.normalization:
             Kxx_lvls += (
-                settings.jitter
-                * tf.eye(num_examples, dtype=settings.float_type)[None]
+                self.jitter
+                * torch.eye(num_examples, dtype=self.float_type)[None]
             )
 
             # Kxx_lvls_diag_sqrt = tf.sqrt(tf.matrix_diag_part(Kxx_lvls))
@@ -1348,9 +1365,19 @@ class SignatureKernel(Kernel):
 
         if full_X2_cov:
             if self.low_rank:
-                Kx2x2_lvls = tf.stack(
-                    [tf.matmul(P, P, transpose_b=True) for P in Phi2_lvls],
-                    axis=0,
+                # Kx2x2_lvls = tf.stack(
+                #     [tf.matmul(P, P, transpose_b=True) for P in Phi2_lvls],
+                #     axis=0,
+                # )
+                Kx2x2_lvls = torch.stack(
+                    [
+                        torch.matmul(
+                            P,
+                            P.T,
+                        )
+                        for P in Phi2_lvls
+                    ],
+                    dim=0,
                 )
             else:
                 Kx2x2_lvls = self._K_seq(X2)
@@ -1361,8 +1388,8 @@ class SignatureKernel(Kernel):
                 #     * tf.eye(num_examples2, dtype=settings.float_type)[None]
                 # )
                 Kx2x2_lvls += (
-                    settings.jitter
-                    * tf.eye(num_examples2, dtype=settings.float_type)[None]
+                    self.jitter
+                    * torch.eye(num_examples2, dtype=self.float_type)[None]
                 )
 
                 # Kx2x2_lvls_diag_sqrt = tf.sqrt(tf.matrix_diag_part(K_x2x2_lvls))
@@ -1410,7 +1437,7 @@ class SignatureKernel(Kernel):
                 Kx2x2_lvls_diag = self._K_seq_diag(X2)
 
             if self.normalization:
-                Kx2x2_lvls_diag += settings.jitter
+                Kx2x2_lvls_diag += self.jitter
 
                 # Kx2x2_lvls_diag_sqrt = tf.sqrt(Kx2x2_lvls_diag)
                 Kx2x2_lvls_diag_sqrt = torch.sqrt(Kx2x2_lvls_diag)
@@ -1420,8 +1447,11 @@ class SignatureKernel(Kernel):
                     * Kx2x2_lvls_diag_sqrt[:, None, :]
                 )
                 # TODO
-                Kx2x2_lvls_diag = tf.tile(
-                    self.sigma * self.variances[:, None], [1, num_examples2]
+                # Kx2x2_lvls_diag = tf.tile(
+                #     self.sigma * self.variances[:, None], [1, num_examples2]
+                # )
+                Kx2x2_lvls_diag = torch.tile(
+                    self.sigma * self.variances[:, None], (1, num_examples2)
                 )
             else:
                 Kx2x2_lvls_diag *= self.sigma * self.variances[:, None]

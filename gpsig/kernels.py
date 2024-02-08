@@ -67,6 +67,9 @@ class SignatureKernel(Kernel):
         """
 
         super().__init__(input_dim, active_dims, name=name)
+        print(f"jitter: {settings.jitter}")
+        print(f"float dtype: {settings.float_type}")
+        print(f"int dtype: {settings.int_type}")
         self.num_features = num_features
         self.num_levels = num_levels
         self.len_examples = self._validate_number_of_features(
@@ -1362,7 +1365,7 @@ class SignatureSpectral(SignatureKernel):
             num_features,
             num_levels,
             lengthscales=None,
-            **kwargs
+            **kwargs,
         )
 
         if family == "exp" or family == "exponential":
