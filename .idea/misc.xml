@@ -2,8 +2,6 @@
 <project version="4">
   <component name="Black">
     <option name="cmdArguments" value="--line-length 80" />
-    <option name="enabledOnReformat" value="true" />
-    <option name="enabledOnSave" value="true" />
     <option name="sdkName" value="gpsig" />
   </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="gpsig" project-jdk-type="Python SDK" />

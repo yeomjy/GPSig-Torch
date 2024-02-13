@@ -51,9 +51,13 @@ def signature_kern_first_order(M, num_levels, difference=True):
         # K.append(tf.reduce_sum(R, axis=(1, -1)))
         # TODO
         # R = M * torch.cumsum(torch.cumsum(R, dim=1), dim=-1)
+        R_ = torch.cumsum(R, dim=1) - R
+        R_ = torch.cumsum(R_, dim=-1) - R_
+        R = M * R_
         K.append(torch.sum(R, dim=(1, -1)))
 
-    return tf.stack(K, axis=0)
+    # return tf.stack(K, axis=0)
+    return torch.stack(K, axis=0)
 
 
 def signature_kern_higher_order(M, num_levels, order=2, difference=True):
@@ -68,11 +72,16 @@ def signature_kern_higher_order(M, num_levels, order=2, difference=True):
     """
 
     if M.shape.ndims == 4:
-        num_examples1, num_examples2 = tf.shape(M)[0], tf.shape(M)[2]
-        K = [tf.ones((num_examples1, num_examples2), dtype=settings.float_type)]
+        # num_examples1, num_examples2 = tf.shape(M)[0], tf.shape(M)[2]
+        num_examples1, num_examples2 = M.size(0), M.size(2)
+        # K = [tf.ones((num_examples1, num_examples2), dtype=torch.float64)]
+        K = [torch.ones(size=(num_examples1, num_examples2),
+                        dtype=torch.float64)]
     else:
-        num_examples = tf.shape(M)[0]
-        K = [tf.ones((num_examples), dtype=settings.float_type)]
+        # num_examples = tf.shape(M)[0]
+        num_examples = M.size(0)
+        # K = [tf.ones((num_examples), dtype=torch.float64)]
+        K = [torch.ones(num_examples, dtype=torch.float64)]
 
     if difference:
         M = (
@@ -82,17 +91,27 @@ def signature_kern_higher_order(M, num_levels, order=2, difference=True):
             - M[:, 1:, ..., :-1]
         )
 
-    K.append(tf.reduce_sum(M, axis=(1, -1)))
+    # K.append(tf.reduce_sum(M, axis=(1, -1)))
+    K.append(torch.sum(M, dim=(1, -1)))
 
     R = np.asarray([[M]])
     for i in range(2, num_levels + 1):
         d = min(i, order)
-        R_next = np.empty((d, d), dtype=tf.Tensor)
-        R_next[0, 0] = M * tf.cumsum(
-            tf.cumsum(tf.add_n(R.flatten().tolist()), exclusive=True, axis=1),
-            exclusive=True,
-            axis=-1,
+        # R_next = np.empty((d, d), dtype=tf.Tensor)
+        R_next = np.empty(shape=(d, d), dtype=torch.Tensor)
+        # R_next[0, 0] = M * tf.cumsum(
+        #     tf.cumsum(tf.add_n(R.flatten().tolist()), exclusive=True, axis=1),
+        #     exclusive=True,
+        #     axis=-1,
+        # )
+        R_next_ = torch.cumsum(
+            R.flatten().tolist()
         )
+        # R_next[0, 0] = M * tf.cumsum(
+        #     tf.cumsum(tf.add_n(R.flatten().tolist()), exclusive=True, axis=1),
+        #     exclusive=True,
+        #     axis=-1,
+        # )
         for j in range(2, d + 1):
             R_next[0, j - 1] = (
                 1

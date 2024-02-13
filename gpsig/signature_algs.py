@@ -59,9 +59,15 @@ def signature_kern_higher_order(M, num_levels, order=2, difference = True):
     
     R = np.asarray([[M]])
     for i in range(2, num_levels+1):
+        print("iter start\n")
+        print("R:", R.shape)
+        print("R[0, 0]:", R[0, 0].shape)
         d = min(i, order)
         R_next = np.empty((d, d), dtype=tf.Tensor)
+        print("R next:", R_next.shape)
         R_next[0, 0] = M * tf.cumsum(tf.cumsum(tf.add_n(R.flatten().tolist()), exclusive=True, axis=1), exclusive=True, axis=-1)
+        print("R next[0, 0]:", R_next[0, 0].shape)
+        print("iter end\n\n")
         for j in range(2, d+1):
             R_next[0, j-1] = 1 / tf.cast(j, settings.float_type) * M * tf.cumsum(tf.add_n(R[:, j-2].tolist()), exclusive=True, axis=1)
             R_next[j-1, 0] = 1 / tf.cast(j, settings.float_type) * M * tf.cumsum(tf.add_n(R[j-2, :].tolist()), exclusive=True, axis=-1)
@@ -220,3 +226,29 @@ def tensor_kern_lr_feature(U, num_levels, rank_bound, sparsity = 'sqrt', seeds =
             k += 1
         Phi.append(R)
     return Phi
+
+if __name__ == "__main__":
+    sess = tf.Session()
+    print("M1 start\n")
+    M1 = tf.random.uniform((3, 4, 5, 6), dtype=np.float64)
+    num_levels = 5
+    x = signature_kern_higher_order(M1, num_levels, order=2, difference = True)
+    sess.run(x)
+    print("M1 end\n")
+
+    print("M2 start\n")
+    M1 = tf.random.uniform((3, 4, 5, 6), dtype=np.float64)
+    M2 = tf.random.uniform((7, 8, 9), dtype=np.float64)
+    num_levels = 5
+    y = signature_kern_higher_order(M2, num_levels, order=2, difference = True)
+    sess.run(y)
+    print("M2 end\n")
+    """
+    Compute the higher-order signature kernel matrix
+    # Input
+    :M:                 (num_examples1, len_examples1, num_examples2, len_examples2) or (num_examples, len_examples, len_examples) tensors
+    :num_levels:        number of signature levels to compute
+    :order:             order of approximation to use in signature kernel
+    # Output
+    :K:                 (num_examples1, num_examples2) or (num_examples) tensor
+    """
