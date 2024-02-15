@@ -23,8 +23,8 @@ def signature_kern_first_order(M, num_levels, difference=True):
         #     tf.shape(M)[-4:]
         # )
         num_examples1, len_examples1, num_examples2, len_examples2 = M.size()[
-            -4:
-        ]
+                                                                     -4:
+                                                                     ]
         # K = [tf.ones((num_examples1, num_examples2), dtype=settings.float_type)]
         K = [torch.ones((num_examples1, num_examples2), dtype=torch.float64)]
     else:
@@ -35,10 +35,10 @@ def signature_kern_first_order(M, num_levels, difference=True):
 
     if difference:
         M = (
-            M[:, 1:, ..., 1:]
-            + M[:, :-1, ..., :-1]
-            - M[:, :-1, ..., 1:]
-            - M[:, 1:, ..., :-1]
+                M[:, 1:, ..., 1:]
+                + M[:, :-1, ..., :-1]
+                - M[:, :-1, ..., 1:]
+                - M[:, 1:, ..., :-1]
         )
 
     K.append(torch.sum(M, dim=(1, -1)))
@@ -57,7 +57,7 @@ def signature_kern_first_order(M, num_levels, difference=True):
         K.append(torch.sum(R, dim=(1, -1)))
 
     # return tf.stack(K, axis=0)
-    return torch.stack(K, axis=0)
+    return torch.stack(K, dim=0)
 
 
 def signature_kern_higher_order(M, num_levels, order=2, difference=True):
@@ -85,10 +85,10 @@ def signature_kern_higher_order(M, num_levels, order=2, difference=True):
 
     if difference:
         M = (
-            M[:, 1:, ..., 1:]
-            + M[:, :-1, ..., :-1]
-            - M[:, :-1, ..., 1:]
-            - M[:, 1:, ..., :-1]
+                M[:, 1:, ..., 1:]
+                + M[:, :-1, ..., :-1]
+                - M[:, :-1, ..., 1:]
+                - M[:, 1:, ..., :-1]
         )
 
     # K.append(tf.reduce_sum(M, axis=(1, -1)))
@@ -114,30 +114,30 @@ def signature_kern_higher_order(M, num_levels, order=2, difference=True):
         # )
         for j in range(2, d + 1):
             R_next[0, j - 1] = (
-                1
-                / tf.cast(j, settings.float_type)
-                * M
-                * tf.cumsum(
-                    tf.add_n(R[:, j - 2].tolist()), exclusive=True, axis=1
-                )
+                    1
+                    / tf.cast(j, settings.float_type)
+                    * M
+                    * tf.cumsum(
+                tf.add_n(R[:, j - 2].tolist()), exclusive=True, axis=1
+            )
             )
             R_next[j - 1, 0] = (
-                1
-                / tf.cast(j, settings.float_type)
-                * M
-                * tf.cumsum(
-                    tf.add_n(R[j - 2, :].tolist()), exclusive=True, axis=-1
-                )
+                    1
+                    / tf.cast(j, settings.float_type)
+                    * M
+                    * tf.cumsum(
+                tf.add_n(R[j - 2, :].tolist()), exclusive=True, axis=-1
+            )
             )
             for k in range(2, d + 1):
                 R_next[j - 1, k - 1] = (
-                    1
-                    / (
-                        tf.cast(j, settings.float_type)
-                        * tf.cast(k, settings.float_type)
-                    )
-                    * M
-                    * R[j - 2, k - 2]
+                        1
+                        / (
+                                tf.cast(j, settings.float_type)
+                                * tf.cast(k, settings.float_type)
+                        )
+                        * M
+                        * R[j - 2, k - 2]
                 )
 
         K.append(
@@ -204,7 +204,7 @@ def signature_kern_tens_vs_seq_first_order(M, num_levels, difference=True):
 
 
 def signature_kern_tens_vs_seq_higher_order(
-    M, num_levels, order=2, difference=True
+        M, num_levels, order=2, difference=True
 ):
     """
     Compute tensor vs (higher-order) signature inner products
@@ -234,7 +234,8 @@ def signature_kern_tens_vs_seq_higher_order(
             )
             for l in range(1, d):
                 R_next[l] = (
-                    1.0 / tf.cast(l + 1, settings.float_type) * M[k] * R[l - 1]
+                        1.0 / tf.cast(l + 1, settings.float_type) * M[k] * R[
+                    l - 1]
                 )
             R = R_next
             k += 1
@@ -244,7 +245,7 @@ def signature_kern_tens_vs_seq_higher_order(
 
 
 def signature_kern_first_order_lr_feature(
-    U, num_levels, rank_bound, sparsity="sqrt", seeds=None, difference=True
+        U, num_levels, rank_bound, sparsity="sqrt", seeds=None, difference=True
 ):
     """
     Compute feature map for (first-order) low-rank signatures from low-rank factor of big kernel matrix
@@ -279,7 +280,7 @@ def signature_kern_first_order_lr_feature(
 
 
 def tensor_kern_lr_feature(
-    U, num_levels, rank_bound, sparsity="sqrt", seeds=None
+        U, num_levels, rank_bound, sparsity="sqrt", seeds=None
 ):
     """
     Compute the low-rank feature map for tensors
